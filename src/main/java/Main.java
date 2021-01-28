@@ -1,5 +1,4 @@
 import com.google.gson.Gson;
-import org.apache.commons.io.FileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
@@ -13,38 +12,25 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class Main {
 
     public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
-        String path_to_tomcat_webapps = getConfig("path_to_tomcat_webapps");
         int check_in_minutes = Integer.parseInt(getConfig("check_in_minutes"));
 
         TimerTask task = new TimerTask() {
             public void run() {
                 try {
-                    List<String> branchNames = getReviews().stream().map((s) -> s.getDisplayText().substring(s.getDisplayText().indexOf(".") + 1)).collect(Collectors.toList());
+                    List<String> activeBranchNames = getReviews().stream().map((s) -> s.getDisplayText().substring(s.getDisplayText().indexOf(".") + 2, s.getDisplayText().length() - 1)).collect(Collectors.toList());
+                    List<String> tomcatWebapps = listTomcatApps();
 
-                    File dir = new File(path_to_tomcat_webapps);
-                    File[] warFiles = dir.listFiles((d, name) -> name.endsWith(".war"));
-
-                    if (warFiles != null) {
-                        for (File file : warFiles) {
-                            String fileName = file.getName();
-                            String warName = fileName.substring(0, fileName.indexOf("."));
-
-                            if (!branchNames.contains(fileName)) {
-                                if (file.delete()) {
-                                    FileUtils.deleteDirectory(new File(path_to_tomcat_webapps + "\\" + warName));
-                                    System.out.println("SUCCESSFUL! war. file named " + fileName + " deleted. Directory " + warName + " deleted succesfully");
-                                } else {
-                                    System.out.println("CANT DELETE " + fileName);
-                                }
+                    if (tomcatWebapps.size() != 0) {
+                        for (String appName : tomcatWebapps) {
+                            if (!activeBranchNames.contains(appName)) {
+                                shutdownTomcatApp(appName);
+                                deleteTomcatApp(appName);
                             }
                         }
                     }
@@ -60,7 +46,7 @@ public class Main {
     }
 
     public static List<Review> getReviews() throws IOException, ParserConfigurationException, SAXException {
-        String ccolab_url = getConfig("ccolaborator_url");
+        String ccolab_url = getConfig("ccolaborator_url") + "/services/json/v1";
         String ccolaborator_login = getConfig("ccolaborator_username");
 
         URL url = new URL(ccolab_url);
@@ -99,7 +85,7 @@ public class Main {
     }
 
     public static String getCcolabTicket() throws IOException, ParserConfigurationException, SAXException {
-        String ccolab_url = getConfig("ccolaborator_url");
+        String ccolab_url = getConfig("ccolaborator_url") + "/services/json/v1";
         String ccolaborator_login = getConfig("ccolaborator_username");
         String ccolaborator_password = getConfig("ccolaborator_password");
 
@@ -130,5 +116,64 @@ public class Main {
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.parse(new File("config.xml"));
         return document.getElementsByTagName(parameter).item(0).getTextContent();
+    }
+
+    public static void shutdownTomcatApp(String appName) {
+        try {
+            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/stop?path=/" + appName);
+            InputStream is = p.getInputStream();
+
+            BufferedReader read = new BufferedReader(new InputStreamReader(is));
+
+            read
+                    .lines()
+                    .forEach(System.out::println);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void deleteTomcatApp(String appName) {
+        try {
+            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/undeploy?path=/" + appName);
+            InputStream is = p.getInputStream();
+
+            BufferedReader read = new BufferedReader(new InputStreamReader(is));
+
+            read
+                    .lines()
+                    .forEach(System.out::println);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static List<String> listTomcatApps() {
+        List<String> appsExclude = Arrays.asList("ROOT", "manager", "docs");
+        List<String> result = new ArrayList<>();
+
+        try {
+            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/list");
+            InputStream is = p.getInputStream();
+
+            BufferedReader read = new BufferedReader(new InputStreamReader(is));
+
+            read
+                    .lines()
+                    .forEach(line -> {
+                        if (line.contains(":")) {
+                            String current = line.substring(line.lastIndexOf(":") + 1);
+                            if (!appsExclude.contains(current)) {
+                                result.add(current);
+                            }
+                        }
+                    });
+            read.close();
+            return result;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
     }
 }

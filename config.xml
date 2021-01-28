@@ -1,7 +1,9 @@
 <configuration>
-    <ccolaborator_url>http://94.244.134.92:8081/services/json/v1</ccolaborator_url>
-    <path_to_tomcat_webapps>C:\Program Files\Apache Software Foundation\Tomcat 8.5\webapp</path_to_tomcat_webapps>
+    <ccolaborator_url>http://94.244.134.92:8081</ccolaborator_url>
     <check_in_minutes>10</check_in_minutes>
     <ccolaborator_username>DenisDetkov</ccolaborator_username>
     <ccolaborator_password>12211221d</ccolaborator_password>
+    <tomcat_url>http://94.244.134.92:8085</tomcat_url>
+    <tomcat_user_login>root</tomcat_user_login>
+    <tomcat_user_password>12211221</tomcat_user_password>
 </configuration>

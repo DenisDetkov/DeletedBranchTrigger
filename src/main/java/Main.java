@@ -2,6 +2,8 @@ import com.google.gson.Gson;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -16,13 +18,20 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Main {
+    public static String ccolaborator_url;
+    public static String ccolaborator_username;
+    public static String ccolaborator_password;
+    public static String tomcat_url;
+    public static String tomcat_user_login;
+    public static String tomcat_user_password;
+    public static int check_in_minutes;
 
-    public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
-        int check_in_minutes = Integer.parseInt(getConfig("check_in_minutes"));
-
+    public static void main(String[] args) throws ParserConfigurationException, SAXException, IOException {
+        actualizeConfigs();
         TimerTask task = new TimerTask() {
             public void run() {
                 try {
+                    actualizeConfigs();
                     List<String> activeBranchNames = getReviews().stream().map((s) -> s.getDisplayText().substring(s.getDisplayText().indexOf(".") + 2, s.getDisplayText().length() - 1)).collect(Collectors.toList());
                     List<String> tomcatWebapps = listTomcatApps();
 
@@ -45,9 +54,8 @@ public class Main {
         timer.scheduleAtFixedRate(task, 0, check_in_minutes * 60000);
     }
 
-    public static List<Review> getReviews() throws IOException, ParserConfigurationException, SAXException {
-        String ccolab_url = getConfig("ccolaborator_url") + "/services/json/v1";
-        String ccolaborator_login = getConfig("ccolaborator_username");
+    public static List<Review> getReviews() throws IOException {
+        String ccolab_url = ccolaborator_url + "/services/json/v1";
 
         URL url = new URL(ccolab_url);
         URLConnection con = url.openConnection();
@@ -55,7 +63,7 @@ public class Main {
         http.setRequestMethod("POST"); // PUT is another valid option
         http.setDoOutput(true);
 
-        byte[] out = ("[{\"command\":\"SessionService.authenticate\",\"args\": {\"login\":\"" + ccolaborator_login + "\",\"ticket\":\"" + getCcolabTicket() + "\"}},{\"command\": \"ReviewService.findReviews\",\"args\": {\"findPlace \": 0,\"searchText\":\" \"}}]").getBytes(StandardCharsets.UTF_8);
+        byte[] out = ("[{\"command\":\"SessionService.authenticate\",\"args\": {\"login\":\"" + ccolaborator_username + "\",\"ticket\":\"" + getCcolabTicket() + "\"}},{\"command\": \"ReviewService.findReviews\",\"args\": {\"findPlace \": 0,\"searchText\":\" \"}}]").getBytes(StandardCharsets.UTF_8);
         int length = out.length;
 
         http.setFixedLengthStreamingMode(length);
@@ -84,17 +92,15 @@ public class Main {
         return result;
     }
 
-    public static String getCcolabTicket() throws IOException, ParserConfigurationException, SAXException {
-        String ccolab_url = getConfig("ccolaborator_url") + "/services/json/v1";
-        String ccolaborator_login = getConfig("ccolaborator_username");
-        String ccolaborator_password = getConfig("ccolaborator_password");
+    public static String getCcolabTicket() throws IOException {
+        String ccolab_url = ccolaborator_url + "/services/json/v1";
 
         URL url = new URL(ccolab_url);
         URLConnection con = url.openConnection();
         HttpURLConnection http = (HttpURLConnection) con;
         http.setRequestMethod("POST"); // PUT is another valid option
         http.setDoOutput(true);
-        byte[] out = ("[{\"command\":\"SessionService.getLoginTicket\",\"args\": {\"login\":\"" + ccolaborator_login + "\",\"password\":\"" + ccolaborator_password + "\"}}]").getBytes(StandardCharsets.UTF_8);
+        byte[] out = ("[{\"command\":\"SessionService.getLoginTicket\",\"args\": {\"login\":\"" + ccolaborator_username + "\",\"password\":\"" + ccolaborator_password + "\"}}]").getBytes(StandardCharsets.UTF_8);
         int length = out.length;
 
         http.setFixedLengthStreamingMode(length);
@@ -111,16 +117,9 @@ public class Main {
         return jsonObj.getJSONObject("result").get("loginTicket").toString();
     }
 
-    public static String getConfig(String parameter) throws ParserConfigurationException, IOException, SAXException {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document document = builder.parse(new File("config.xml"));
-        return document.getElementsByTagName(parameter).item(0).getTextContent();
-    }
-
     public static void shutdownTomcatApp(String appName) {
         try {
-            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/stop?path=/" + appName);
+            Process p = Runtime.getRuntime().exec("curl --user " + tomcat_user_login + ":" + tomcat_user_password + " " + tomcat_url + "/manager/text/stop?path=/" + appName);
             InputStream is = p.getInputStream();
 
             BufferedReader read = new BufferedReader(new InputStreamReader(is));
@@ -135,7 +134,7 @@ public class Main {
 
     public static void deleteTomcatApp(String appName) {
         try {
-            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/undeploy?path=/" + appName);
+            Process p = Runtime.getRuntime().exec("curl --user " + tomcat_user_login + ":" + tomcat_user_password + " " + tomcat_url + "/manager/text/undeploy?path=/" + appName);
             InputStream is = p.getInputStream();
 
             BufferedReader read = new BufferedReader(new InputStreamReader(is));
@@ -153,7 +152,7 @@ public class Main {
         List<String> result = new ArrayList<>();
 
         try {
-            Process p = Runtime.getRuntime().exec("curl --user " + getConfig("tomcat_user_login") + ":" + getConfig("tomcat_user_password") + " " + getConfig("tomcat_url") + "/manager/text/list");
+            Process p = Runtime.getRuntime().exec("curl --user " + tomcat_user_login + ":" + tomcat_user_password + " " + tomcat_url + "/manager/text/list");
             InputStream is = p.getInputStream();
 
             BufferedReader read = new BufferedReader(new InputStreamReader(is));
@@ -175,5 +174,41 @@ public class Main {
         }
 
         return result;
+    }
+
+    public static void actualizeConfigs() throws IOException, SAXException, ParserConfigurationException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document document = builder.parse(new File("config.xml"));
+        Node parrentNode = document.getDocumentElement();
+
+        NodeList nodeList = parrentNode.getChildNodes();
+        for (int i = 0; i < nodeList.getLength(); i++) {
+            Node currentNode = nodeList.item(i);
+            if (currentNode.getNodeType() == Node.ELEMENT_NODE) {
+                switch (currentNode.getNodeName()) {
+                    case "ccolaborator_url":
+                        ccolaborator_url = currentNode.getTextContent();
+                        break;
+                    case "check_in_minutes":
+                        check_in_minutes = Integer.parseInt(currentNode.getTextContent());
+                        break;
+                    case "ccolaborator_username":
+                        ccolaborator_username = currentNode.getTextContent();
+                        break;
+                    case "ccolaborator_password":
+                        ccolaborator_password = currentNode.getTextContent();
+                        break;
+                    case "tomcat_url":
+                        tomcat_url = currentNode.getTextContent();
+                        break;
+                    case "tomcat_user_login":
+                        tomcat_user_login = currentNode.getTextContent();
+                        break;
+                    case "tomcat_user_password":
+                        tomcat_user_password = currentNode.getTextContent();
+                }
+            }
+        }
     }
 }
